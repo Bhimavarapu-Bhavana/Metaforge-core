@@ -840,11 +840,27 @@ const lineNumbers = document.getElementById('lineNumbers');
 editor.value = JSON.stringify(defaultConfig, null, 2);
 updateLineNumbers();
 validateAndUpdate();
+loadServerConfig();
 
 editor.addEventListener('input', () => {
   updateLineNumbers();
   validateAndUpdate();
 });
+
+async function loadServerConfig() {
+  try {
+    const response = await fetch('/api/config');
+    if (!response.ok) throw new Error('Unable to fetch config');
+    const serverConfig = await response.json();
+    editor.value = JSON.stringify(serverConfig, null, 2);
+    updateLineNumbers();
+    validateAndUpdate();
+    showToast('success', 'Loaded configuration from backend');
+  } catch (error) {
+    showToast('warning', 'Backend config unavailable; using local default');
+  }
+}
+
 
 editor.addEventListener('scroll', () => {
   lineNumbers.scrollTop = editor.scrollTop;
@@ -1705,7 +1721,7 @@ function deployApp() {
   modal.querySelector('.mono').textContent = `https://${slug}.metaforge.app`;
 }
 
-function executeDeploy() {
+async function executeDeploy() {
   const btn = document.getElementById('deployNowBtn');
   const progress = document.getElementById('deployProgress');
   const steps = document.getElementById('deploySteps');
@@ -1713,6 +1729,22 @@ function executeDeploy() {
   btn.style.opacity = '0.5';
   btn.innerHTML = `<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>${t('deploying')}`;
   progress.style.display = 'block';
+
+  const config = getConfig();
+  const response = await fetch('/api/deploy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  });
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.innerHTML = t('deployBtn');
+    showToast('error', result.issues ? result.issues[0] : 'Deployment failed');
+    return;
+  }
 
   const deploySteps = [
     { text: 'Validating configuration...', icon: 'fa-check-circle', time: 600 },
