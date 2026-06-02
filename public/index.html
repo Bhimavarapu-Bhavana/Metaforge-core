@@ -174,6 +174,11 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes slideDown {
+  from { transform: translate(-50%, -100%); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
 .animate-pulse-glow { animation: pulse-glow 2s ease infinite; }
 .animate-float { animation: float 3s ease infinite; }
 
@@ -732,7 +737,11 @@ function switchTab(tab) {
     const el = document.getElementById('tab-' + t);
     if (el) el.style.display = t === tab ? (t === 'editor' ? 'flex' : 'block') : 'none';
   });
-  if (tab === 'preview') renderPreview();
+  if (tab === 'preview') {
+    previewState.currentPageIndex = 0;
+    previewState.selectedRows = [];
+    renderPreview();
+  }
   if (tab === 'api') renderAPIs();
   if (tab === 'database') renderDatabase();
   if (tab === 'workflows') renderWorkflows();
@@ -954,6 +963,16 @@ function validateConfig(config) {
 }
 
 // =============================================
+// PREVIEW STATE MANAGEMENT
+// =============================================
+let previewState = {
+  selectedRows: [],
+  toastMessages: [],
+  clickLog: [],
+  currentPageIndex: 0
+};
+
+// =============================================
 // PREVIEW RENDERER
 // =============================================
 function renderPreview() {
@@ -969,7 +988,7 @@ function renderPreview() {
 
   let html = '';
   const pages = config.pages || [];
-  const activePage = pages[0];
+  const activePage = pages[previewState.currentPageIndex] || pages[0];
 
   if (activePage) {
     html += renderPage(activePage, config);
@@ -985,12 +1004,24 @@ function renderPreview() {
     html += `<div style="border-top:1px solid #eee;padding:12px 20px;display:flex;gap:8px;background:#fafafa;">
       <span style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;line-height:28px;margin-right:8px;">Pages:</span>`;
     pages.forEach((p, i) => {
-      html += `<button onclick="this.parentElement.parentElement.querySelector('.page-content').innerHTML=document.getElementById('previewFrame').querySelector('.page-content').innerHTML" style="padding:4px 12px;border-radius:6px;border:1px solid ${i===0?'#00c080':'#ddd'};background:${i===0?'#e8faf4':'white'};color:${i===0?'#00a070':'#666'};font-size:12px;font-weight:500;cursor:pointer;">${p.name}</button>`;
+      const isActive = i === previewState.currentPageIndex;
+      html += `<button onclick="switchPreviewPage(${i})" style="padding:4px 12px;border-radius:6px;border:1px solid ${isActive?'#00c080':'#ddd'};background:${isActive?'#e8faf4':'white'};color:${isActive?'#00a070':'#666'};font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#00c080';this.style.color='#00a070'" onmouseout="this.style.borderColor='${isActive?'#00c080':'#ddd'}';this.style.color='${isActive?'#00a070':'#666'}'">${p.name}</button>`;
     });
     html += `</div>`;
   }
 
   frame.innerHTML = html;
+}
+
+function switchPreviewPage(pageIndex) {
+  const config = getConfig();
+  const pages = config.pages || [];
+  if (pageIndex >= 0 && pageIndex < pages.length) {
+    previewState.currentPageIndex = pageIndex;
+    renderPreview();
+    showPreviewToast('info', `Switched to "${pages[pageIndex].name}" page`);
+    addNotification('info', `Navigated to: ${pages[pageIndex].name}`);
+  }
 }
 
 function renderPage(page, config) {
@@ -1016,7 +1047,8 @@ function renderComponent(comp, config) {
     case 'card': {
       const colors = ['#00c080','#ff6b4a','#6b8aff','#ffaa22','#c084fc'];
       const c = colors[Math.abs(hashCode(p.title||'')) % colors.length];
-      return `<div style="background:white;border:1px solid #eee;border-radius:12px;padding:20px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+      const cardId = 'card-' + Math.random().toString(36).substr(2, 9);
+      return `<div id="${cardId}" style="background:white;border:1px solid #eee;border-radius:12px;padding:20px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04);cursor:pointer;transition:all 0.2s ease;" onmouseover="this.style.boxShadow='0 8px 16px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.04)';this.style.transform='translateY(0)'" onclick="handleCardClick(this, '${p.title||'Card'}')">
         <div style="font-size:12px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">${p.title||'Card'}</div>
         <div style="font-size:32px;font-weight:700;color:${c};">${Math.floor(Math.random()*50+10)}</div>
         <div style="font-size:11px;color:#aaa;margin-top:4px;">${p.source||''} ${p.aggregate||''}</div>
@@ -1033,24 +1065,25 @@ function renderComponent(comp, config) {
     case 'table': {
       const cols = p.columns || [];
       const sampleData = generateSampleData(p.source, cols, config, 5);
+      const tableId = 'table-' + Math.random().toString(36).substr(2, 9);
       return `<div style="background:white;border:1px solid #eee;border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
         <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:between;">
           <span style="font-weight:600;font-size:15px;color:#1a1a2e;">${p.source||'Table'}</span>
           <div style="flex:1;"></div>
-          <button style="padding:6px 14px;background:#00c080;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">+ Add New</button>
+          <button onclick="handleAddNewClick('${p.source}')" style="padding:6px 14px;background:#00c080;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;">+ Add New</button>
         </div>
         <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;" id="${tableId}">
             <thead><tr style="background:#f8f9fa;">
               ${cols.map(c => `<th style="padding:10px 16px;text-align:left;font-weight:600;color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">${c}</th>`).join('')}
               <th style="padding:10px 16px;text-align:right;font-weight:600;color:#555;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Actions</th>
             </tr></thead>
-            <tbody>${sampleData.map(row => `
-              <tr style="border-top:1px solid #f0f0f0;">
+            <tbody>${sampleData.map((row, idx) => `
+              <tr style="border-top:1px solid #f0f0f0;cursor:pointer;transition:all 0.15s;" id="row-${idx}" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'" onclick="handleTableRowClick(this, ${idx}, '${p.source}')">
                 ${cols.map(c => `<td style="padding:10px 16px;color:#333;">${row[c] || '-'}</td>`).join('')}
                 <td style="padding:10px 16px;text-align:right;">
-                  <button style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;background:white;color:#666;font-size:11px;cursor:pointer;margin-right:4px;">Edit</button>
-                  <button style="padding:4px 8px;border:1px solid #ffcccc;border-radius:4px;background:white;color:#ff4444;font-size:11px;cursor:pointer;">Delete</button>
+                  <button onclick="event.stopPropagation();handleTableEdit('${p.source}', ${idx})" style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;background:white;color:#666;font-size:11px;cursor:pointer;margin-right:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#00c080';this.style.color='#00c080'" onmouseout="this.style.borderColor='#ddd';this.style.color='#666'">Edit</button>
+                  <button onclick="event.stopPropagation();handleTableDelete('${p.source}', ${idx})" style="padding:4px 8px;border:1px solid #ffcccc;border-radius:4px;background:white;color:#ff4444;font-size:11px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#ff0000';this.style.background='#ffe8e8'" onmouseout="this.style.borderColor='#ffcccc';this.style.background='white'">Delete</button>
                 </td>
               </tr>`).join('')}
             </tbody>
@@ -1060,14 +1093,15 @@ function renderComponent(comp, config) {
     }
     case 'form': {
       const fields = p.fields || [];
+      const formId = 'form-' + Math.random().toString(36).substr(2, 9);
       return `<div style="background:white;border:1px solid #eee;border-radius:12px;padding:24px;max-width:600px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-        <form onsubmit="return false;">
-          ${fields.map(f => `
+        <form id="${formId}" onsubmit="return false;">
+          ${fields.map((f, fi) => `
             <div style="margin-bottom:16px;">
               <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:6px;">${f}</label>
-              <input type="text" placeholder="Enter ${f}" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;transition:border-color 0.15s;" onfocus="this.style.borderColor='#00c080'" onblur="this.style.borderColor='#ddd'">
+              <input type="text" id="field-${fi}" placeholder="Enter ${f}" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;transition:border-color 0.15s;" onfocus="this.style.borderColor='#00c080'" onblur="this.style.borderColor='#ddd'" onclick="event.stopPropagation();handleFormInputClick(this, '${f}')">
             </div>`).join('')}
-          <button type="submit" style="padding:10px 24px;background:#00c080;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">${p.submitText || 'Submit'}</button>
+          <button type="button" onclick="handleFormSubmit('${formId}', '${p.source || 'Form'}')" style="padding:10px 24px;background:#00c080;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#00a070'" onmouseout="this.style.background='#00c080'">${p.submitText || 'Submit'}</button>
         </form>
       </div>`;
     }
@@ -1080,7 +1114,7 @@ function renderComponent(comp, config) {
         <div style="font-weight:600;font-size:15px;color:#1a1a2e;margin-bottom:16px;">Tasks by Status</div>
         <div style="display:flex;align-items:flex-end;gap:20px;height:180px;padding-top:20px;">
           ${statuses.map((s, i) => `
-            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:all 0.2s;" onclick="handleChartBarClick('${s}', ${values[i]})" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
               <span style="font-size:14px;font-weight:700;color:${colors[i]};">${values[i]}</span>
               <div style="width:100%;max-width:60px;background:${colors[i]};border-radius:6px 6px 0 0;height:${(values[i]/maxVal)*140}px;transition:height 0.5s ease;"></div>
               <span style="font-size:11px;color:#888;font-weight:500;">${s.replace('_',' ')}</span>
@@ -1089,9 +1123,10 @@ function renderComponent(comp, config) {
       </div>`;
     }
     case 'button':
-      return `<button style="padding:10px 20px;background:${p.color||'#00c080'};color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px;">${p.text||'Button'}</button>`;
+      const btnId = 'btn-' + Math.random().toString(36).substr(2, 9);
+      return `<button id="${btnId}" style="padding:10px 20px;background:${p.color||'#00c080'};color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px;transition:all 0.2s;" onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 4px 12px rgba(0,192,128,0.3)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none'" onclick="handleButtonClick(this, '${p.text||'Button'}')">${p.text||'Button'}</button>`;
     case 'image':
-      return `<img src="${p.src||'https://picsum.photos/seed/metaforge/600/300.jpg'}" alt="${p.alt||''}" style="width:100%;border-radius:12px;margin-bottom:12px;object-fit:cover;max-height:300px;">`;
+      return `<img src="${p.src||'https://picsum.photos/seed/metaforge/600/300.jpg'}" alt="${p.alt||''}" style="width:100%;border-radius:12px;margin-bottom:12px;object-fit:cover;max-height:300px;cursor:pointer;transition:all 0.2s;" onclick="handleImageClick(this)" onmouseover="this.style.transform='scale(1.02)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none'">`;
     default:
       return `<div style="padding:12px;border:1px dashed #ddd;border-radius:8px;color:#999;font-size:13px;margin-bottom:12px;"><i class="fas fa-question-circle" style="margin-right:6px;"></i>Unknown: ${comp.type}</div>`;
   }
@@ -1104,6 +1139,129 @@ function hashCode(str) {
     hash |= 0;
   }
   return hash;
+}
+
+// =============================================
+// INTERACTIVE CLICK HANDLERS
+// =============================================
+function handleButtonClick(btn, text) {
+  btn.style.background = '#00a070';
+  setTimeout(() => { btn.style.background = '#00c080'; }, 150);
+  showPreviewToast('success', `Button "${text}" clicked!`);
+  addNotification('info', `Button action: ${text}`);
+}
+
+function handleCardClick(card, title) {
+  card.style.background = '#f0fffe';
+  card.style.borderColor = '#00c080';
+  setTimeout(() => { 
+    card.style.background = 'white';
+    card.style.borderColor = '#eee';
+  }, 300);
+  showPreviewToast('info', `Card "${title}" selected`);
+  addNotification('info', `Viewing: ${title}`);
+}
+
+function handleTableRowClick(row, index, entity) {
+  const allRows = row.parentElement.querySelectorAll('tr');
+  allRows.forEach(r => {
+    r.style.background = 'white';
+    r.style.borderLeft = 'none';
+  });
+  row.style.background = '#e8faf4';
+  row.style.borderLeft = '4px solid #00c080';
+  previewState.selectedRows = [index];
+  showPreviewToast('info', `Row ${index + 1} selected`);
+  addNotification('info', `Selected ${entity} record #${index + 1}`);
+}
+
+function handleTableEdit(entity, index) {
+  showPreviewToast('warning', `Edit mode for ${entity} #${index + 1}`);
+  addNotification('info', `Opening editor for ${entity} record`);
+}
+
+function handleTableDelete(entity, index) {
+  showPreviewToast('error', `${entity} record #${index + 1} deleted`);
+  addNotification('success', `Deleted ${entity} record successfully`);
+}
+
+function handleAddNewClick(entity) {
+  showPreviewToast('info', `Creating new ${entity}`);
+  addNotification('info', `New ${entity} form opened`);
+}
+
+function handleFormInputClick(input, field) {
+  showPreviewToast('info', `Editing: ${field}`);
+}
+
+function handleFormSubmit(formId, source) {
+  const form = document.getElementById(formId);
+  const inputs = form.querySelectorAll('input');
+  let filledCount = 0;
+  inputs.forEach(input => {
+    if (input.value.trim()) filledCount++;
+    input.style.borderColor = input.value.trim() ? '#00c080' : '#ff6b4a';
+    setTimeout(() => { input.style.borderColor = '#ddd'; }, 200);
+  });
+  if (filledCount > 0) {
+    showPreviewToast('success', `${source} submitted with ${filledCount} field(s)`);
+    addNotification('success', `Created new ${source} record`);
+    form.reset();
+  } else {
+    showPreviewToast('error', 'Please fill in at least one field');
+  }
+}
+
+function handleChartBarClick(status, value) {
+  showPreviewToast('info', `${status}: ${value} tasks`);
+  addNotification('info', `Viewing tasks with status: ${status}`);
+}
+
+function handleImageClick(img) {
+  showPreviewToast('info', 'Image clicked - opening preview');
+  addNotification('info', `Viewing image: ${img.alt || 'Image'}`);
+}
+
+function showPreviewToast(type, message) {
+  const frame = document.getElementById('previewFrame');
+  if (!frame) return;
+  
+  const existingToast = frame.querySelector('.preview-toast');
+  if (existingToast) existingToast.remove();
+  
+  const toast = document.createElement('div');
+  toast.className = 'preview-toast';
+  const colors = {
+    success: { bg: 'rgba(0,232,157,0.95)', border: '#00c080', icon: 'fa-check-circle' },
+    error: { bg: 'rgba(255,68,102,0.95)', border: '#ff4466', icon: 'fa-times-circle' },
+    warning: { bg: 'rgba(255,170,34,0.95)', border: '#ffaa22', icon: 'fa-exclamation-circle' },
+    info: { bg: 'rgba(107,138,255,0.95)', border: '#6b8aff', icon: 'fa-info-circle' }
+  };
+  const c = colors[type] || colors.info;
+  
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: ${c.bg};
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border-left: 4px solid ${c.border};
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 1000;
+    animation: slideDown 0.3s ease;
+  `;
+  toast.innerHTML = `<i class="fas ${c.icon}"></i><span>${message}</span>`;
+  frame.appendChild(toast);
+  
+  setTimeout(() => { toast.remove(); }, 2500);
 }
 
 function generateSampleData(source, cols, config, count) {
