@@ -4,9 +4,9 @@ import { ToastContainer } from './components/ToastContainer';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { MainWorkspace } from './components/MainWorkspace';
-import { CSVModal } from './components/CSVModal';
-import { AuthModal } from './components/AuthModal';
-import { DeployModal } from './components/DeployModal';
+import { CSVModal } from './components/Modals/CSVModal';
+import { AuthModal } from './components/Modals/AuthModal';
+import { DeployModal } from './components/Modals/DeployModal';
 
 const AppContent: React.FC = () => {
   const {
