@@ -11,9 +11,14 @@ const configPath = path.join(__dirname, 'data', 'defaultConfig.json');
 app.use(cors());
 app.use(express.json());
 app.use(express.static(publicDir));
+// ADD THE NEW ENDPOINT HERE:
+app.post('/api/deploy', (req, res) => {
+  console.log('Deployment triggered:', req.body);
+  // Add logic here to interact with a cloud provider API
+  res.status(200).json({ message: 'Deployment initiated' });
+});
 
-let currentConfig = loadConfig();
-
+// If you have an app.listen(port, ...) call, keep it at the very bottom
 function loadConfig() {
   try {
     return JSON.parse(fs.readFileSync(configPath, 'utf8'));
