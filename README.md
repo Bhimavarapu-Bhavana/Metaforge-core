@@ -25,5 +25,5 @@ Then open `http://localhost:3000` in your browser.
 - `GET /api/config` - returns the current default configuration
 - `POST /api/config` - save a new configuration object
 - `POST /api/validate` - validate a JSON configuration
-- `POST /api/deploy` - simulate deployment and return a generated URL
 - `GET /api/:entity` - returns sample entity data for the requested entity name
+ - `GET /api/:entity` - returns sample entity data for the requested entity name

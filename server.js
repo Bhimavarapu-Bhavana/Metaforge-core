@@ -11,10 +11,6 @@ const configPath = path.join(__dirname, 'data', 'defaultConfig.json');
 app.use(cors());
 app.use(express.json());
 app.use(express.static(publicDir));
-app.post('/api/deploy', (req, res) => {
-  console.log('Deployment triggered:', req.body);
-  res.status(200).json({ message: 'Deployment initiated' });
-});
 let currentConfig = loadConfig();
 
 function loadConfig() {
@@ -105,15 +101,7 @@ app.post('/api/validate', (req, res) => {
   res.json({ valid: issues.length === 0, issues });
 });
 
-app.post('/api/deploy', (req, res) => {
-  const config = req.body;
-  const issues = validateConfig(config);
-  if (issues.length) {
-    return res.status(400).json({ ok: false, issues });
-  }
-  const slug = (config.app.name || 'metaforge').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  return res.json({ ok: true, url: `https://${slug}.metaforge.app` });
-});
+// NOTE: Deploy endpoint removed. Deployment is handled outside of this runtime.
 
 app.get('/api/:entity', (req, res) => {
   const entityName = req.params.entity;
